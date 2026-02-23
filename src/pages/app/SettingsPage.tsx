@@ -4,6 +4,7 @@ import Cropper from 'react-easy-crop'
 import { useAuthStore } from '@/store/auth'
 import { usersApi } from '@/api/users'
 import { authApi } from '@/api/auth'
+import { getHwid } from '@/lib/hwid'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import type { Session } from '@/types/api'
@@ -148,7 +149,7 @@ function AvatarCropper({
 
 // ── Типы ─────────────────────────────────────────────────────────────────────
 
-type SettingsTab = 'profile' | 'security' | 'sessions' | 'account'
+type SettingsTab = 'profile' | 'security' | 'voice-video' | 'sessions' | 'account'
 
 // ── SidebarTab ───────────────────────────────────────────────────────────────
 
@@ -204,6 +205,95 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 // ── ProfileSection ───────────────────────────────────────────────────────────
 
+function SelectField({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string
+  value: string
+  onChange: (next: string) => void
+  options: Array<{ value: string; label: string }>
+}) {
+  return (
+    <label className="block">
+      <span className="text-sm font-medium text-text-secondary">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="mt-1.5 w-full bg-secondary border border-elevated rounded-xl px-4 py-2.5 text-sm text-text outline-none transition-all duration-150 focus:border-primary/50"
+      >
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value} className="bg-secondary text-text">
+            {opt.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+function ToggleRow({
+  id,
+  title,
+  description,
+  checked,
+  onChange,
+}: {
+  id: string
+  title: string
+  description: string
+  checked: boolean
+  onChange: (checked: boolean) => void
+}) {
+  return (
+    <label htmlFor={id} className="flex items-start justify-between gap-4 py-1 cursor-pointer select-none">
+      <div className="min-w-0">
+        <p className="text-[14px] font-medium text-text">{title}</p>
+        <p className="text-[12px] text-text-secondary mt-0.5">{description}</p>
+      </div>
+      <span className="relative inline-flex items-center shrink-0">
+        <input
+          id={id}
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          className="peer sr-only"
+        />
+        <span className="w-11 h-6 rounded-full bg-elevated border border-elevated/70 transition-colors peer-checked:bg-primary/25 peer-checked:border-primary/40" />
+        <span className="absolute left-0.5 top-0.5 w-5 h-5 rounded-full bg-text-disabled transition-transform peer-checked:translate-x-5 peer-checked:bg-primary" />
+      </span>
+    </label>
+  )
+}
+
+function deviceLabel(device: MediaDeviceInfo, fallbackPrefix: string, index: number): string {
+  if (device.label && device.label.trim() !== '') return device.label
+  return `${fallbackPrefix} ${index + 1}`
+}
+
+function withSavedDeviceOption(
+  options: Array<{ value: string; label: string }>,
+  selectedValue: string,
+  fallbackLabel: string,
+) {
+  if (!selectedValue || selectedValue === 'default') return options
+  if (options.some((opt) => opt.value === selectedValue)) return options
+  return [...options, { value: selectedValue, label: `${fallbackLabel} (сохранено)` }]
+}
+
+function readSavedVolume(
+  key: string,
+  fallbackKey?: string,
+): number {
+  const raw = localStorage.getItem(key) ?? (fallbackKey ? localStorage.getItem(fallbackKey) : null)
+  if (raw == null) return 100
+  const num = Number(raw)
+  if (!Number.isFinite(num)) return 100
+  return Math.min(100, Math.max(0, Math.round(num)))
+}
+
 function ProfileSection() {
   const user = useAuthStore((s) => s.user)
   const setAuth = useAuthStore((s) => s.setAuth)
@@ -252,7 +342,7 @@ function ProfileSection() {
       const fresh = await usersApi.me()
       const accessToken = localStorage.getItem('access_token') ?? ''
       const refreshToken = localStorage.getItem('refresh_token') ?? ''
-      setAuth(fresh, { access_token: accessToken, refresh_token: refreshToken })
+      setAuth(fresh, accessToken, refreshToken)
 
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
@@ -399,6 +489,24 @@ function formatDate(iso: string): string {
   })
 }
 
+function toTs(iso: string): number {
+  const ts = Date.parse(iso)
+  return Number.isNaN(ts) ? 0 : ts
+}
+
+function normalizeSessions(list: Session[]): Session[] {
+  const byHwid = new Map<string, Session>()
+
+  for (const session of list) {
+    const prev = byHwid.get(session.hwid)
+    if (!prev || toTs(session.last_seen_at) > toTs(prev.last_seen_at)) {
+      byHwid.set(session.hwid, session)
+    }
+  }
+
+  return [...byHwid.values()].sort((a, b) => toTs(b.last_seen_at) - toTs(a.last_seen_at))
+}
+
 function SessionsSkeleton() {
   return (
     <div className="space-y-2">
@@ -415,24 +523,343 @@ function SessionsSkeleton() {
   )
 }
 
+function VoiceVideoSection() {
+  const [audioInputs, setAudioInputs] = useState<MediaDeviceInfo[]>([])
+  const [audioOutputs, setAudioOutputs] = useState<MediaDeviceInfo[]>([])
+  const [videoInputs, setVideoInputs] = useState<MediaDeviceInfo[]>([])
+  const [devicesLoading, setDevicesLoading] = useState(false)
+  const [requestingAudioAccess, setRequestingAudioAccess] = useState(false)
+  const [deviceError, setDeviceError] = useState<string | null>(null)
+
+  const [audioInputId, setAudioInputId] = useState(() => localStorage.getItem('settings.audioInputId') ?? 'default')
+  const [audioOutputId, setAudioOutputId] = useState(() => localStorage.getItem('settings.audioOutputId') ?? 'default')
+  const [videoInputId, setVideoInputId] = useState(() => localStorage.getItem('settings.videoInputId') ?? 'default')
+  const [videoQuality, setVideoQuality] = useState(() => localStorage.getItem('settings.videoQuality') ?? 'auto')
+  const [micVolume, setMicVolume] = useState(() => readSavedVolume('settings.micVolume'))
+  const [speakerVolume, setSpeakerVolume] = useState(() => readSavedVolume('settings.speakerVolume', 'settings.outputVolume'))
+  const [noiseSuppression, setNoiseSuppression] = useState(() => localStorage.getItem('settings.noiseSuppression') !== '0')
+  const [echoCancellation, setEchoCancellation] = useState(() => localStorage.getItem('settings.echoCancellation') !== '0')
+
+  useEffect(() => {
+    if (localStorage.getItem('settings.noiseSuppression') == null) {
+      localStorage.setItem('settings.noiseSuppression', '1')
+    }
+    if (localStorage.getItem('settings.echoCancellation') == null) {
+      localStorage.setItem('settings.echoCancellation', '1')
+    }
+  }, [])
+
+  const loadDevices = useCallback(async (): Promise<MediaDeviceInfo[]> => {
+    if (!navigator.mediaDevices?.enumerateDevices) {
+      setAudioInputs([])
+      setAudioOutputs([])
+      setVideoInputs([])
+      setDeviceError('Браузер не поддерживает список устройств.')
+      return []
+    }
+
+    setDevicesLoading(true)
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices()
+      setAudioInputs(devices.filter((d) => d.kind === 'audioinput'))
+      setAudioOutputs(devices.filter((d) => d.kind === 'audiooutput'))
+      setVideoInputs(devices.filter((d) => d.kind === 'videoinput'))
+      setDeviceError(null)
+      return devices
+    } catch {
+      setAudioInputs([])
+      setAudioOutputs([])
+      setVideoInputs([])
+      setDeviceError('Не удалось получить список устройств.')
+      return []
+    } finally {
+      setDevicesLoading(false)
+    }
+  }, [])
+
+  const requestAudioAccess = useCallback(async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setDeviceError('Браузер не поддерживает запрос доступа к микрофону.')
+      return
+    }
+    setRequestingAudioAccess(true)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      stream.getTracks().forEach((track) => track.stop())
+      await loadDevices()
+      setDeviceError(null)
+    } catch {
+      setDeviceError('Доступ к микрофону не выдан. Показаны доступные устройства без имен.')
+    } finally {
+      setRequestingAudioAccess(false)
+    }
+  }, [loadDevices])
+
+  useEffect(() => {
+    let cancelled = false
+    const autoInit = async () => {
+      const devices = await loadDevices()
+      if (cancelled) return
+
+      const hasUnnamedAudio = devices.some(
+        (d) => (d.kind === 'audioinput' || d.kind === 'audiooutput') && (!d.label || d.label.trim() === ''),
+      )
+      if (!hasUnnamedAudio || !navigator.mediaDevices?.getUserMedia) return
+
+      setRequestingAudioAccess(true)
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        stream.getTracks().forEach((track) => track.stop())
+        if (cancelled) return
+        await loadDevices()
+        if (cancelled) return
+        setDeviceError(null)
+      } catch {
+        if (cancelled) return
+        setDeviceError('Доступ к микрофону не выдан. Показаны доступные устройства без имен.')
+      } finally {
+        if (!cancelled) {
+          setRequestingAudioAccess(false)
+        }
+      }
+    }
+
+    void autoInit()
+
+    if (!navigator.mediaDevices?.addEventListener) return
+
+    const handleDeviceChange = () => {
+      void loadDevices()
+    }
+    navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange)
+
+    return () => {
+      cancelled = true
+      navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange)
+    }
+  }, [loadDevices])
+
+  useEffect(() => {
+    localStorage.setItem('settings.audioInputId', audioInputId)
+  }, [audioInputId])
+
+  useEffect(() => {
+    localStorage.setItem('settings.audioOutputId', audioOutputId)
+  }, [audioOutputId])
+
+  useEffect(() => {
+    localStorage.setItem('settings.videoInputId', videoInputId)
+  }, [videoInputId])
+
+  useEffect(() => {
+    localStorage.setItem('settings.videoQuality', videoQuality)
+  }, [videoQuality])
+
+  useEffect(() => {
+    localStorage.setItem('settings.micVolume', String(micVolume))
+    window.dispatchEvent(new CustomEvent('nook:call-settings-changed', {
+      detail: { micVolume },
+    }))
+  }, [micVolume])
+
+  useEffect(() => {
+    localStorage.setItem('settings.speakerVolume', String(speakerVolume))
+    window.dispatchEvent(new CustomEvent('nook:call-settings-changed', {
+      detail: { speakerVolume },
+    }))
+  }, [speakerVolume])
+
+  useEffect(() => {
+    localStorage.setItem('settings.noiseSuppression', noiseSuppression ? '1' : '0')
+  }, [noiseSuppression])
+
+  useEffect(() => {
+    localStorage.setItem('settings.echoCancellation', echoCancellation ? '1' : '0')
+  }, [echoCancellation])
+
+  const audioInputOptions = withSavedDeviceOption([
+    { value: 'default', label: 'Системный микрофон (по умолчанию)' },
+    ...audioInputs.map((device, i) => ({
+      value: device.deviceId,
+      label: deviceLabel(device, 'Микрофон', i),
+    })),
+  ], audioInputId, 'Сохраненный микрофон')
+
+  const audioOutputOptions = withSavedDeviceOption([
+    { value: 'default', label: 'Системный вывод (по умолчанию)' },
+    ...audioOutputs.map((device, i) => ({
+      value: device.deviceId,
+      label: deviceLabel(device, 'Динамик', i),
+    })),
+  ], audioOutputId, 'Сохраненный вывод')
+
+  const videoInputOptions = withSavedDeviceOption([
+    { value: 'default', label: 'Системная камера (по умолчанию)' },
+    ...videoInputs.map((device, i) => ({
+      value: device.deviceId,
+      label: deviceLabel(device, 'Камера', i),
+    })),
+  ], videoInputId, 'Сохраненная камера')
+
+  return (
+    <div className="max-w-2xl">
+      <SectionTitle>Голос и видео</SectionTitle>
+
+      <div className="space-y-5">
+        <div className="bg-secondary rounded-xl p-5">
+          <div className="mb-4 flex items-start justify-between gap-3 flex-wrap">
+            <h3 className="text-[14px] font-semibold text-text">Голос</h3>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void loadDevices()}
+                disabled={devicesLoading}
+              >
+                {devicesLoading ? 'Обновление...' : 'Обновить список'}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void requestAudioAccess()}
+                disabled={requestingAudioAccess}
+              >
+                {requestingAudioAccess ? 'Запрос...' : 'Доступ к микрофону'}
+              </Button>
+            </div>
+          </div>
+
+          {deviceError ? (
+            <p className="text-[12px] text-error mb-4">{deviceError}</p>
+          ) : (
+            <p className="text-[12px] text-text-disabled mb-4">
+              Для отображения названий устройств разрешите доступ к микрофону.
+            </p>
+          )}
+
+          <div className="space-y-4">
+            <SelectField
+              label="Устройство ввода"
+              value={audioInputId}
+              onChange={setAudioInputId}
+              options={audioInputOptions}
+            />
+            <SelectField
+              label="Устройство вывода"
+              value={audioOutputId}
+              onChange={setAudioOutputId}
+              options={audioOutputOptions}
+            />
+            <label className="block">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-text-secondary">Уровень микрофона</span>
+                <span className="text-[12px] text-text-disabled">{micVolume}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={micVolume}
+                onChange={(e) => setMicVolume(Number(e.target.value))}
+                className="mt-2 w-full accent-primary cursor-pointer"
+              />
+            </label>
+            <label className="block">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-text-secondary">Громкость динамика</span>
+                <span className="text-[12px] text-text-disabled">{speakerVolume}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={speakerVolume}
+                onChange={(e) => setSpeakerVolume(Number(e.target.value))}
+                className="mt-2 w-full accent-primary cursor-pointer"
+              />
+            </label>
+            <div className="h-px bg-elevated/60" />
+            <div className="space-y-2">
+              <ToggleRow
+                id="noise-suppression"
+                title="Шумоподавление"
+                description="Убирает фоновые шумы с микрофона во время звонка."
+                checked={noiseSuppression}
+                onChange={setNoiseSuppression}
+              />
+              <ToggleRow
+                id="echo-cancellation"
+                title="Эхоподавление"
+                description="Снижает эффект эха и обратной связи в голосовом канале."
+                checked={echoCancellation}
+                onChange={setEchoCancellation}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-secondary rounded-xl p-5">
+          <h3 className="text-[14px] font-semibold text-text mb-4">Видео</h3>
+          <div className="space-y-4">
+            <SelectField
+              label="Камера"
+              value={videoInputId}
+              onChange={setVideoInputId}
+              options={videoInputOptions}
+            />
+            <SelectField
+              label="Качество видео"
+              value={videoQuality}
+              onChange={setVideoQuality}
+              options={[
+                { value: 'auto', label: 'Авто' },
+                { value: '720p', label: '720p' },
+                { value: '1080p', label: '1080p' },
+              ]}
+            />
+          </div>
+        </div>
+
+        <p className="text-[12px] text-text-disabled">
+          Настройки сохраняются локально и будут применяться при подключении к звонку.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 function SessionsSection() {
   const navigate = useNavigate()
   const clearAuth = useAuthStore((s) => s.clearAuth)
+  const currentHwid = getHwid()
 
   const [sessions, setSessions] = useState<Session[]>([])
   const [loading, setLoading] = useState(true)
   const [logoutAllLoading, setLogoutAllLoading] = useState(false)
 
   useEffect(() => {
+    let cancelled = false
+
     usersApi.sessions().then((data) => {
-      setSessions(data.sessions)
+      if (cancelled) return
+      setSessions(normalizeSessions(data.sessions))
       setLoading(false)
-    }).catch(() => setLoading(false))
+    }).catch(() => {
+      if (cancelled) return
+      setLoading(false)
+    })
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   async function handleLogoutAll() {
     setLogoutAllLoading(true)
     try {
+      await usersApi.removePushToken(getHwid()).catch(() => {})
       await authApi.logoutAll()
     } finally {
       clearAuth()
@@ -469,10 +896,19 @@ function SessionsSection() {
                   Активность: {formatDate(session.last_seen_at)}
                 </p>
               </div>
+              {session.hwid === currentHwid ? (
+                <span className="text-[11px] text-success font-medium shrink-0 mt-0.5">
+                  Текущая
+                </span>
+              ) : null}
             </div>
           ))}
         </div>
       )}
+
+      <p className="text-[12px] text-text-disabled mb-4">
+        Завершение отдельных сессий пока не поддерживается API.
+      </p>
 
       <Button variant="danger" onClick={handleLogoutAll} loading={logoutAllLoading}>
         Завершить все сессии
@@ -493,6 +929,8 @@ function AccountSection() {
   async function handleLogout() {
     setLogoutLoading(true)
     try {
+      const hwid = getHwid()
+      await usersApi.removePushToken(hwid).catch(() => {})
       await authApi.logout()
     } finally {
       clearAuth()
@@ -503,6 +941,8 @@ function AccountSection() {
   async function handleLogoutAll() {
     setLogoutAllLoading(true)
     try {
+      const hwid = getHwid()
+      await usersApi.removePushToken(hwid).catch(() => {})
       await authApi.logoutAll()
     } finally {
       clearAuth()
@@ -592,6 +1032,9 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
               <SidebarTab active={activeTab === 'security'} onClick={() => setActiveTab('security')}>
                 Безопасность
               </SidebarTab>
+              <SidebarTab active={activeTab === 'voice-video'} onClick={() => setActiveTab('voice-video')}>
+                Голос/видео
+              </SidebarTab>
               <SidebarTab active={activeTab === 'sessions'} onClick={() => setActiveTab('sessions')}>
                 Сессии
               </SidebarTab>
@@ -614,6 +1057,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
           <div className="flex-1 overflow-y-auto px-8 py-8">
             {activeTab === 'profile' && <ProfileSection />}
             {activeTab === 'security' && <SecuritySection />}
+            {activeTab === 'voice-video' && <VoiceVideoSection />}
             {activeTab === 'sessions' && <SessionsSection />}
             {activeTab === 'account' && <AccountSection />}
           </div>

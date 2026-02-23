@@ -1,8 +1,12 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+﻿import { useState, useRef, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { friendsApi } from '@/api/friends'
 import { usersApi } from '@/api/users'
+import { roomsApi } from '@/api/rooms'
 import { ApiError } from '@/api/client'
 import { useAuthStore } from '@/store/auth'
+import { useRoomsStore } from '@/store/rooms'
+import { usePresenceStore } from '@/store/presence'
 import type { User } from '@/types/api'
 
 // ── Типы ────────────────────────────────────────────────────────────────────
@@ -40,22 +44,6 @@ function IconFriends() {
   )
 }
 
-function IconMessage() {
-  return (
-    <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
-    </svg>
-  )
-}
-
-function IconMore() {
-  return (
-    <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
-    </svg>
-  )
-}
-
 function IconCheck() {
   return (
     <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -77,6 +65,93 @@ function IconClose() {
     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
     </svg>
+  )
+}
+
+// ── Модальное окно профиля друга ────────────────────────────────────────────
+
+function FriendProfileModal({
+  user,
+  isOnline,
+  onClose,
+  onMessage,
+}: {
+  user: User
+  isOnline: boolean
+  onClose: () => void
+  onMessage: () => void
+}) {
+  const color = avatarColor(user.username)
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-[2px]"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="w-full max-w-md bg-secondary border border-elevated rounded-2xl shadow-2xl overflow-hidden">
+        <div className="px-6 pt-6 pb-4 flex items-start justify-between">
+          <div>
+            <h2 className="font-pixel text-[22px] font-semibold text-text leading-[1.1]">
+              Профиль друга
+            </h2>
+            <p className="text-text-secondary text-[13px] mt-1.5">
+              Информация о пользователе
+            </p>
+          </div>
+          <button onClick={onClose} className="text-text-disabled hover:text-text transition-colors ml-4 mt-0.5">
+            <IconClose />
+          </button>
+        </div>
+
+        <div className="px-6 pb-6">
+          <div className="flex items-center gap-4 p-4 rounded-xl border border-elevated bg-bg/35">
+            <div className="relative shrink-0">
+              {user.avatar_url ? (
+                <img src={user.avatar_url} alt={user.display_name} className="w-16 h-16 rounded-full object-cover" />
+              ) : (
+                <div
+                  className="w-16 h-16 rounded-full flex items-center justify-center text-[22px] font-semibold text-bg"
+                  style={{ backgroundColor: color }}
+                >
+                  {user.display_name[0]?.toUpperCase() ?? '?'}
+                </div>
+              )}
+              <span className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-secondary ${isOnline ? 'bg-success' : 'bg-text-disabled'}`} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[18px] font-semibold text-text truncate">{user.display_name}</p>
+              <p className="text-[14px] text-text-secondary truncate">@{user.username}</p>
+              <p className={`text-[12px] mt-1 ${isOnline ? 'text-success' : 'text-text-disabled'}`}>
+                {isOnline ? 'В сети' : 'Не в сети'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 mt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-[14px] font-medium text-text-secondary hover:text-text transition-colors"
+            >
+              Закрыть
+            </button>
+            <button
+              type="button"
+              onClick={onMessage}
+              className="px-5 py-2 bg-primary text-bg text-[14px] font-semibold rounded-xl hover:bg-primary-hover active:scale-[0.98] transition-all shadow-[0_0_16px_rgba(0,245,160,0.2)]"
+            >
+              Написать
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -127,11 +202,24 @@ function TabBtn({ active, onClick, badge, children }: {
 
 // ── Карточка друга ───────────────────────────────────────────────────────────
 
-function FriendRow({ entry }: { entry: FriendEntry }) {
+function FriendRow({
+  entry,
+  onMessage,
+  onOpenProfile,
+  isOnline,
+}: {
+  entry: FriendEntry
+  onMessage: (userId: string) => void
+  onOpenProfile: (user: User) => void
+  isOnline: boolean
+}) {
   const { user } = entry
   const color = avatarColor(user.username)
   return (
-    <div className="flex items-center px-3 py-3 rounded-lg hover:bg-elevated/50 cursor-pointer group transition-colors border-t border-elevated/20 first:border-t-0">
+    <div
+      onClick={() => onOpenProfile(user)}
+      className="flex items-center px-3 py-3 rounded-lg hover:bg-elevated/50 cursor-pointer group transition-colors border-t border-elevated/20 first:border-t-0"
+    >
       <div className="relative mr-4 shrink-0">
         {user.avatar_url ? (
           <img src={user.avatar_url} alt={user.display_name} className="w-9 h-9 rounded-full object-cover" />
@@ -143,24 +231,29 @@ function FriendRow({ entry }: { entry: FriendEntry }) {
             {user.display_name[0]}
           </div>
         )}
+        {isOnline && (
+          <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-success border-2 border-secondary" />
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-[15px] font-semibold text-text truncate">{user.display_name}</p>
         <p className="text-[13px] text-text-disabled truncate">@{user.username}</p>
       </div>
-      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-        <button title="Написать сообщение" className="w-9 h-9 rounded-full bg-bg flex items-center justify-center text-text-secondary hover:text-text transition-colors">
-          <IconMessage />
-        </button>
-        <button title="Ещё" className="w-9 h-9 rounded-full bg-bg flex items-center justify-center text-text-secondary hover:text-text transition-colors">
-          <IconMore />
+      <div className="flex items-center gap-2 shrink-0">
+        <button
+          title="Открыть чат"
+          onClick={(e) => {
+            e.stopPropagation()
+            onMessage(user.id)
+          }}
+          className="px-3 h-8 rounded-lg bg-primary/15 text-primary hover:bg-primary/25 transition-colors text-[13px] font-semibold"
+        >
+          Чат
         </button>
       </div>
     </div>
   )
 }
-
-// ── Карточка заявки ──────────────────────────────────────────────────────────
 
 function PendingRow({ entry, onAccept, onDecline, disabled }: {
   entry: PendingEntry
@@ -347,9 +440,13 @@ function AddFriendModal({ onClose, onSuccess }: {
 
 export function HomePage() {
   const currentUser = useAuthStore((s) => s.user)
+  const navigate = useNavigate()
+  const fetchRooms = useRoomsStore((s) => s.fetch)
+  const online = usePresenceStore((s) => s.online)
 
   const [tab, setTab] = useState<Tab>('online')
   const [showAddFriend, setShowAddFriend] = useState(false)
+  const [profileUser, setProfileUser] = useState<User | null>(null)
 
   const [friends, setFriends] = useState<FriendEntry[]>([])
   const [incoming, setIncoming] = useState<PendingEntry[]>([])
@@ -374,6 +471,17 @@ export function HomePage() {
           return { requestId: f.id, user }
         })
       )
+
+      const presence = usePresenceStore.getState()
+      for (const { user } of enrichedFriends) {
+        if (user.online === true) {
+          presence.setOnline(user.id)
+        } else {
+          // Treat absent/false as offline to avoid stale online flags in the "Online" tab.
+          presence.setOffline(user.id)
+        }
+      }
+
       setFriends(enrichedFriends)
 
       // Обогащаем входящие заявки
@@ -422,7 +530,46 @@ export function HomePage() {
     }
   }
 
+  const findExistingDmRoomId = useCallback((targetUserId: string) => {
+    const { rooms, dmUsers } = useRoomsStore.getState()
+    const existing = rooms.find((room) => room.type === 'dm' && dmUsers[room.id]?.id === targetUserId)
+    return existing?.id
+  }, [])
+
+  const handleMessage = async (userId: string) => {
+    try {
+      const room = await roomsApi.create({ type: 'dm', user_ids: [userId] })
+      await fetchRooms()
+      navigate(`/app/dm/${room.id}`)
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        let roomId = findExistingDmRoomId(userId)
+        if (!roomId) {
+          await fetchRooms()
+          roomId = findExistingDmRoomId(userId)
+        }
+        if (roomId) {
+          navigate(`/app/dm/${roomId}`)
+        }
+      }
+    }
+  }
+
+  const handleOpenProfile = (user: User) => {
+    setProfileUser(user)
+  }
+
+  const handleProfileMessage = async () => {
+    if (!profileUser) return
+    const userId = profileUser.id
+    setProfileUser(null)
+    await handleMessage(userId)
+  }
+
   const pendingCount = incoming.length
+  const visibleFriends = tab === 'online'
+    ? friends.filter((entry) => online.has(entry.user.id))
+    : friends
 
   return (
     <>
@@ -457,14 +604,20 @@ export function HomePage() {
             <>
               {/* Вкладки "В сети" и "Все" */}
               {(tab === 'online' || tab === 'all') && (
-                friends.length > 0 ? (
+                visibleFriends.length > 0 ? (
                   <>
                     <p className="text-[11px] font-semibold text-text-disabled uppercase tracking-[0.9px] mb-2 px-2">
-                      {tab === 'online' ? `В сети — ${friends.length}` : `Все — ${friends.length}`}
+                      {tab === 'online' ? `В сети — ${visibleFriends.length}` : `Все — ${visibleFriends.length}`}
                     </p>
                     <div>
-                      {friends.map((entry) => (
-                        <FriendRow key={entry.requestId} entry={entry} />
+                      {visibleFriends.map((entry) => (
+                        <FriendRow
+                          key={entry.requestId}
+                          entry={entry}
+                          onMessage={handleMessage}
+                          onOpenProfile={handleOpenProfile}
+                          isOnline={online.has(entry.user.id)}
+                        />
                       ))}
                     </div>
                   </>
@@ -541,6 +694,17 @@ export function HomePage() {
           }}
         />
       )}
+      {profileUser && (
+        <FriendProfileModal
+          user={profileUser}
+          isOnline={online.has(profileUser.id)}
+          onClose={() => setProfileUser(null)}
+          onMessage={() => void handleProfileMessage()}
+        />
+      )}
     </>
   )
 }
+
+
+

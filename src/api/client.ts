@@ -50,30 +50,40 @@ async function request<T>(
   return data as T
 }
 
+let refreshPromise: Promise<boolean> | null = null
+
 async function tryRefresh(): Promise<boolean> {
-  const refreshToken = localStorage.getItem('refresh_token')
-  if (!refreshToken) return false
+  if (refreshPromise) return refreshPromise
 
-  try {
-    const res = await fetch(`${BASE_URL}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    })
+  refreshPromise = (async () => {
+    const refreshToken = localStorage.getItem('refresh_token')
+    if (!refreshToken) return false
 
-    if (!res.ok) {
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
+    try {
+      const res = await fetch(`${BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      })
+
+      if (!res.ok) {
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+        return false
+      }
+
+      const data: AuthResponse = await res.json()
+      localStorage.setItem('access_token', data.access_token)
+      localStorage.setItem('refresh_token', data.refresh_token)
+      return true
+    } catch {
       return false
+    } finally {
+      refreshPromise = null
     }
+  })()
 
-    const data: AuthResponse = await res.json()
-    localStorage.setItem('access_token', data.access_token)
-    localStorage.setItem('refresh_token', data.refresh_token)
-    return true
-  } catch {
-    return false
-  }
+  return refreshPromise
 }
 
 export const api = {
@@ -84,6 +94,8 @@ export const api = {
     request<T>(path, { method: 'POST', body: form }, true),
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PATCH', body: body ? JSON.stringify(body) : undefined }),
+  put: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 }
 

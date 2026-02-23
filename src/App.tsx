@@ -6,6 +6,7 @@ import { LoginPage } from '@/pages/auth/LoginPage'
 import { RegisterPage } from '@/pages/auth/RegisterPage'
 import { AppLayout } from '@/pages/app/AppLayout'
 import { HomePage } from '@/pages/app/HomePage'
+import { ChatPage } from '@/pages/app/ChatPage'
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
         <Route element={<AuthGuard />}>
           <Route path="/app" element={<AppLayout />}>
             <Route index element={<HomePage />} />
+            <Route path="dm/:roomId" element={<ChatPage />} />
           </Route>
         </Route>
 

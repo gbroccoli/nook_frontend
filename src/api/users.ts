@@ -28,4 +28,12 @@ export const usersApi = {
   // Профиль пользователя по ID
   getById: (id: string) =>
     api.get<User>(`/users/${id}`),
+
+  // Зарегистрировать FCM-токен устройства
+  registerPushToken: (token: string, hwid: string) =>
+    api.post<void>('/users/me/push-token', { token, hwid }),
+
+  // Удалить FCM-токен устройства
+  removePushToken: (hwid: string) =>
+    api.delete<void>(`/users/me/push-token?hwid=${encodeURIComponent(hwid)}`),
 }
