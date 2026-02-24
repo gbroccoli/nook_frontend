@@ -500,6 +500,7 @@ export function ChatPage() {
   const [cameraEnabled, setCameraEnabled] = useState(false)
   const [remoteVideoCount, setRemoteVideoCount] = useState(0)
   const [remoteParticipantCount, setRemoteParticipantCount] = useState(0)
+  const [remoteParticipantTracks, setRemoteParticipantTracks] = useState<Record<string, { microphone?: boolean; camera?: boolean; screen_share?: boolean }>>({})
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -843,6 +844,7 @@ export function ChatPage() {
     }
     setInCall(false)
     setRemoteParticipantCount(0)
+    setRemoteParticipantTracks({})
     setMicEnabled(true)
     setCameraEnabled(false)
     setCallMode('audio')
@@ -1270,6 +1272,7 @@ export function ChatPage() {
     setActiveCall(null)
     setIncomingCall(null)
     setCallError(null)
+    setRemoteParticipantTracks({})
     endingCallIdRef.current = null
     disconnectCallSession()
     lastReadRequestAtRef.current = 0
@@ -1530,6 +1533,46 @@ export function ChatPage() {
           if (!Number.isNaN(prevMs) && !Number.isNaN(nextMs) && prevMs >= nextMs) return prev
           return { ...prev, [payload.user_id!]: payload.last_read_at! }
         })
+      }
+
+      if (event.type === 'call.participant_left') {
+        const payload = (event.payload ?? {}) as {
+          call_id?: string
+          room_id?: string
+          user_id?: string
+        }
+        if (!payload.call_id || payload.room_id !== roomId) return
+        // Когда не в LiveKit-комнате, обновляем счётчик вручную (в звонке это делает SDK)
+        if (!inCall) {
+          setRemoteParticipantCount((prev) => Math.max(0, prev - 1))
+        }
+        if (payload.user_id) {
+          setRemoteParticipantTracks((prev) => {
+            const next = { ...prev }
+            delete next[payload.user_id!]
+            return next
+          })
+        }
+      }
+
+      if (event.type === 'call.track_update') {
+        const payload = (event.payload ?? {}) as {
+          call_id?: string
+          room_id?: string
+          user_id?: string
+          source?: 'microphone' | 'camera' | 'screen_share'
+          published?: boolean
+        }
+        if (!payload.call_id || payload.room_id !== roomId || !payload.user_id || !payload.source) return
+        if (payload.user_id === currentUserId) return
+        const { user_id, source, published } = payload
+        setRemoteParticipantTracks((prev) => ({
+          ...prev,
+          [user_id]: {
+            ...prev[user_id],
+            [source]: published ?? false,
+          },
+        }))
       }
     })
 
@@ -2107,9 +2150,14 @@ export function ChatPage() {
               {!(callMode === 'video' || cameraEnabled || remoteVideoCount > 0) && (
                 <div className="px-3 py-3 text-[13px] text-text-secondary flex items-center justify-between gap-3">
                   <span>Аудиозвонок активен</span>
-                  <span className="text-[11px] text-text-disabled">
-                    {remoteParticipantCount > 0 ? `${remoteParticipantCount} участник(а) в звонке` : 'Ожидание участников...'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {Object.entries(remoteParticipantTracks).some(([, t]) => t.microphone === true) && (
+                      <Mic className="w-3.5 h-3.5 text-success shrink-0" />
+                    )}
+                    <span className="text-[11px] text-text-disabled">
+                      {remoteParticipantCount > 0 ? `${remoteParticipantCount} участник(а) в звонке` : 'Ожидание участников...'}
+                    </span>
+                  </div>
                 </div>
               )}
 
