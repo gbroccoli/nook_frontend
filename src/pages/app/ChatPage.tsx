@@ -898,7 +898,12 @@ export function ChatPage() {
         setRemoteParticipantCount(roomInstance.remoteParticipants.size)
       })
 
-      await roomInstance.connect(livekitUrl, token)
+      // Апгрейдим ws:// → wss:// если страница открыта по HTTPS (иначе Mixed Content)
+      const safeUrl =
+        window.location.protocol === 'https:' && livekitUrl.startsWith('ws://')
+          ? 'wss://' + livekitUrl.slice('ws://'.length)
+          : livekitUrl
+      await roomInstance.connect(safeUrl, token)
 
       let micIsEnabled = false
       try {
