@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Room as LiveKitRoom, RoomEvent, Track, type AudioCaptureOptions, type VideoCaptureOptions, type VideoResolution } from 'livekit-client'
+import { DeepFilterNoiseFilterProcessor } from 'deepfilternet3-noise-filter'
 import { messagesApi } from '@/api/messages'
 import { callsApi } from '@/api/calls'
 import { roomsApi } from '@/api/rooms'
@@ -357,10 +358,26 @@ function readCallMediaSettings(): CallMediaSettings {
 function buildAudioCaptureOptions(settings: CallMediaSettings): AudioCaptureOptions {
   return {
     deviceId: settings.audioInputId,
-    noiseSuppression: settings.noiseSuppression,
-    echoCancellation: settings.echoCancellation,
-    autoGainControl: true,
+    // Браузерный шумодав отключён — DeepFilterNet3 обрабатывает когда включён
+    noiseSuppression: false,
+    echoCancellation: settings.echoCancellation ? { ideal: true } : false,
+    autoGainControl: { ideal: true },
+    processor: settings.noiseSuppression
+      ? new DeepFilterNoiseFilterProcessor({ sampleRate: 48000, noiseReductionLevel: 80 })
+      : undefined,
+  } as AudioCaptureOptions
+}
+
+function logAudioSettings(room: LiveKitRoom) {
+  const pub = [...room.localParticipant.audioTrackPublications.values()]
+    .find((p) => p.track?.mediaStreamTrack?.kind === 'audio')
+  const mst = pub?.track?.mediaStreamTrack
+  if (!mst) {
+    console.log('[audio] no mediaStreamTrack yet')
+    return
   }
+  console.log('[audio] constraints:', mst.getConstraints?.())
+  console.log('[audio] settings:', mst.getSettings?.())
 }
 
 function buildVideoCaptureOptions(settings: CallMediaSettings): VideoCaptureOptions {
@@ -692,24 +709,9 @@ export function ChatPage() {
     setRemoteVideoCount(remoteVideoContainerRef.current?.childElementCount ?? 0)
   }, [])
 
-  const applyMicVolumeToRoom = useCallback(async (micVolume: number) => {
-    const roomInstance = liveKitRoomRef.current
-    if (!roomInstance) return
-
-    const normalizedVolume = toMediaElementVolume(micVolume)
-    const tasks: Promise<unknown>[] = []
-    roomInstance.localParticipant.audioTrackPublications.forEach((publication) => {
-      const track = publication.track
-      const mediaStreamTrack = track?.mediaStreamTrack
-      if (!mediaStreamTrack) return
-      tasks.push(
-        mediaStreamTrack.applyConstraints({
-          volume: normalizedVolume,
-        } as unknown as MediaTrackConstraints).catch(() => undefined),
-      )
-    })
-    await Promise.all(tasks)
-  }, [])
+  // volume constraint не поддерживается в WebRTC — управление громкостью входа
+  // возможно только через WebAudio GainNode; пока оставляем заглушку
+  const applyMicVolumeToRoom = useCallback(async (_micVolume: number) => {}, [])
 
   const applyOutputVolumeToAttachedElements = useCallback((outputVolume: number) => {
     const normalizedVolume = toMediaElementVolume(outputVolume)
@@ -856,7 +858,6 @@ export function ChatPage() {
     const roomInstance = new LiveKitRoom({
       adaptiveStream: true,
       dynacast: true,
-      audioCaptureDefaults: buildAudioCaptureOptions(mediaSettings),
       videoCaptureDefaults: buildVideoCaptureOptions(mediaSettings),
       audioOutput: mediaSettings.audioOutputId ? { deviceId: mediaSettings.audioOutputId } : undefined,
     })
@@ -909,6 +910,7 @@ export function ChatPage() {
       let micIsEnabled = false
       try {
         await roomInstance.localParticipant.setMicrophoneEnabled(true, buildAudioCaptureOptions(mediaSettings))
+        logAudioSettings(roomInstance)
         await applyMicVolumeToRoom(mediaSettings.micVolume)
         micIsEnabled = true
       } catch {
