@@ -359,6 +359,7 @@ function buildAudioCaptureOptions(settings: CallMediaSettings): AudioCaptureOpti
     deviceId: settings.audioInputId,
     noiseSuppression: settings.noiseSuppression,
     echoCancellation: settings.echoCancellation,
+    autoGainControl: true,
   }
 }
 
