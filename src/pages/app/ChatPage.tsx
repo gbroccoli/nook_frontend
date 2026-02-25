@@ -357,6 +357,7 @@ function readCallMediaSettings(): CallMediaSettings {
 function buildAudioCaptureOptions(settings: CallMediaSettings): AudioCaptureOptions {
   return {
     deviceId: settings.audioInputId,
+    sampleRate: 48000,
     // Браузерный шумодав отключён — DeepFilterNet3 применяется отдельно после создания трека
     noiseSuppression: false,
     echoCancellation: settings.echoCancellation ? { ideal: true } : false,
@@ -737,7 +738,7 @@ export function ChatPage() {
       await audioTrack.setProcessor(
         new DeepFilterNoiseFilterProcessor({
           sampleRate: 48000,
-          noiseReductionLevel: 65,
+          noiseReductionLevel: 60,
           assetConfig: { cdnUrl: '/deepfilter' },
         }),
       )
