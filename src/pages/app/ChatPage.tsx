@@ -900,7 +900,6 @@ export function ChatPage() {
       dynacast: true,
       videoCaptureDefaults: buildVideoCaptureOptions(mediaSettings),
       audioOutput: mediaSettings.audioOutputId ? { deviceId: mediaSettings.audioOutputId } : undefined,
-      webAudioMix: true,
     })
     liveKitRoomRef.current = roomInstance
     try {
