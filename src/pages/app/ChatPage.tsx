@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Room as LiveKitRoom, RoomEvent, Track, type AudioCaptureOptions, type VideoCaptureOptions, type VideoResolution } from 'livekit-client'
+import { Room as LiveKitRoom, RoomEvent, Track, LocalAudioTrack, type AudioCaptureOptions, type VideoCaptureOptions, type VideoResolution } from 'livekit-client'
 import { DeepFilterNoiseFilterProcessor } from 'deepfilternet3-noise-filter'
 import { messagesApi } from '@/api/messages'
 import { callsApi } from '@/api/calls'
@@ -358,13 +358,10 @@ function readCallMediaSettings(): CallMediaSettings {
 function buildAudioCaptureOptions(settings: CallMediaSettings): AudioCaptureOptions {
   return {
     deviceId: settings.audioInputId,
-    // Браузерный шумодав отключён — DeepFilterNet3 обрабатывает когда включён
+    // Браузерный шумодав отключён — DeepFilterNet3 применяется отдельно после создания трека
     noiseSuppression: false,
     echoCancellation: settings.echoCancellation ? { ideal: true } : false,
     autoGainControl: { ideal: true },
-    processor: settings.noiseSuppression
-      ? new DeepFilterNoiseFilterProcessor({ sampleRate: 48000, noiseReductionLevel: 80 })
-      : undefined,
   } as AudioCaptureOptions
 }
 
@@ -537,6 +534,7 @@ export function ChatPage() {
   const latestIncomingMessageIdRef = useRef<string | undefined>(undefined)
   const knownMessageIdsRef = useRef<Set<string>>(new Set())
   const isTypingRef = useRef(false)
+  const audioContextRef = useRef<AudioContext | null>(null)
   const typingRepeatTimerRef = useRef<number | null>(null)
   const typingAutoRemoveTimers = useRef<Map<string, number>>(new Map())
 
@@ -713,6 +711,37 @@ export function ChatPage() {
   // возможно только через WebAudio GainNode; пока оставляем заглушку
   const applyMicVolumeToRoom = useCallback(async (_micVolume: number) => {}, [])
 
+  // Применяет DeepFilterNet3 к уже опубликованному треку микрофона.
+  // Процессор нельзя передавать в setMicrophoneEnabled — LiveKit не успевает
+  // установить audioContext на новый трек до вызова setProcessor.
+  const applyNoiseProcessorIfEnabled = useCallback(async (room: LiveKitRoom) => {
+    const settings = readCallMediaSettings()
+    if (!settings.noiseSuppression) return
+
+    const micPub = [...room.localParticipant.audioTrackPublications.values()]
+      .find((pub) => pub.source === Track.Source.Microphone)
+    if (!micPub?.track) return
+
+    const audioTrack = micPub.track as LocalAudioTrack
+
+    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+      audioContextRef.current = new AudioContext()
+    }
+    const ctx = audioContextRef.current
+    if (ctx.state === 'suspended') {
+      await ctx.resume()
+    }
+
+    audioTrack.setAudioContext(ctx)
+    try {
+      await audioTrack.setProcessor(
+        new DeepFilterNoiseFilterProcessor({ sampleRate: 48000, noiseReductionLevel: 80 }),
+      )
+    } catch (e) {
+      console.warn('[mic] Failed to apply DeepFilterNet3 processor:', e)
+    }
+  }, [])
+
   const applyOutputVolumeToAttachedElements = useCallback((outputVolume: number) => {
     const normalizedVolume = toMediaElementVolume(outputVolume)
     const isMuted = normalizedVolume === 0
@@ -732,10 +761,11 @@ export function ChatPage() {
       const newSettings = readCallMediaSettings()
       await roomInstance.localParticipant.setMicrophoneEnabled(true, buildAudioCaptureOptions(newSettings))
       await applyMicVolumeToRoom(newSettings.micVolume)
+      await applyNoiseProcessorIfEnabled(roomInstance)
     } catch {
       // Ignore — mic restart is best-effort
     }
-  }, [applyMicVolumeToRoom])
+  }, [applyMicVolumeToRoom, applyNoiseProcessorIfEnabled])
 
   const attachRemoteTrack = useCallback((trackKey: string, track: Track) => {
     const element = track.attach()
@@ -841,6 +871,12 @@ export function ChatPage() {
       roomInstance.disconnect()
       liveKitRoomRef.current = null
     }
+    // Закрываем AudioContext — иначе AudioWorklet DeepFilterNet3 держит
+    // ссылку на MediaStream и браузер не отпускает микрофон
+    if (audioContextRef.current) {
+      void audioContextRef.current.close()
+      audioContextRef.current = null
+    }
     clearAttachedTracks()
     if (localVideoRef.current) {
       localVideoRef.current.srcObject = null
@@ -911,12 +947,15 @@ export function ChatPage() {
       let micIsEnabled = false
       try {
         await roomInstance.localParticipant.setMicrophoneEnabled(true, buildAudioCaptureOptions(mediaSettings))
-        logAudioSettings(roomInstance)
-        await applyMicVolumeToRoom(mediaSettings.micVolume)
         micIsEnabled = true
       } catch (micErr) {
         console.error('[mic] setMicrophoneEnabled failed:', micErr)
         setCallError((prev) => prev ?? 'Подключено без микрофона: разрешение не выдано или устройство недоступно.')
+      }
+      if (micIsEnabled) {
+        await applyNoiseProcessorIfEnabled(roomInstance)
+        logAudioSettings(roomInstance)
+        await applyMicVolumeToRoom(mediaSettings.micVolume)
       }
 
       let cameraIsEnabled = false
@@ -1094,6 +1133,7 @@ export function ChatPage() {
         const mediaSettings = readCallMediaSettings()
         await roomInstance.localParticipant.setMicrophoneEnabled(true, buildAudioCaptureOptions(mediaSettings))
         await applyMicVolumeToRoom(mediaSettings.micVolume)
+        await applyNoiseProcessorIfEnabled(roomInstance)
       } else {
         await roomInstance.localParticipant.setMicrophoneEnabled(false)
       }
@@ -1101,7 +1141,7 @@ export function ChatPage() {
     } catch {
       setCallError('Не удалось переключить микрофон.')
     }
-  }, [applyMicVolumeToRoom, callBusy, micEnabled])
+  }, [applyMicVolumeToRoom, applyNoiseProcessorIfEnabled, callBusy, micEnabled])
 
   const handleToggleCamera = useCallback(async () => {
     const roomInstance = liveKitRoomRef.current
