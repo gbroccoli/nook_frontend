@@ -913,7 +913,8 @@ export function ChatPage() {
         logAudioSettings(roomInstance)
         await applyMicVolumeToRoom(mediaSettings.micVolume)
         micIsEnabled = true
-      } catch {
+      } catch (micErr) {
+        console.error('[mic] setMicrophoneEnabled failed:', micErr)
         setCallError((prev) => prev ?? 'Подключено без микрофона: разрешение не выдано или устройство недоступно.')
       }
 
