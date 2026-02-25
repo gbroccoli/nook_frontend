@@ -737,7 +737,7 @@ export function ChatPage() {
       await audioTrack.setProcessor(
         new DeepFilterNoiseFilterProcessor({
           sampleRate: 48000,
-          noiseReductionLevel: 80,
+          noiseReductionLevel: 50,
           assetConfig: { cdnUrl: '/deepfilter' },
         }),
       )
