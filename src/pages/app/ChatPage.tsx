@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Room as LiveKitRoom, RoomEvent, Track, LocalAudioTrack, type AudioCaptureOptions, type VideoCaptureOptions, type VideoResolution } from 'livekit-client'
-import { KrispNoiseFilter } from '@livekit/krisp-noise-filter'
 import { messagesApi } from '@/api/messages'
 import { callsApi } from '@/api/calls'
 import { roomsApi } from '@/api/rooms'
@@ -734,6 +733,7 @@ export function ChatPage() {
 
     audioTrack.setAudioContext(ctx)
     try {
+      const { KrispNoiseFilter } = await import('@livekit/krisp-noise-filter')
       await audioTrack.setProcessor(KrispNoiseFilter())
     } catch (e) {
       console.warn('[mic] Failed to apply DeepFilterNet3 processor:', e)
