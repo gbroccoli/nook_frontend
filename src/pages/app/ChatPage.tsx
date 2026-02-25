@@ -361,7 +361,7 @@ function buildAudioCaptureOptions(settings: CallMediaSettings): AudioCaptureOpti
     // Браузерный шумодав отключён — DeepFilterNet3 применяется отдельно после создания трека
     noiseSuppression: false,
     echoCancellation: settings.echoCancellation ? { ideal: true } : false,
-    autoGainControl: { ideal: true },
+    autoGainControl: false,
   } as AudioCaptureOptions
 }
 
