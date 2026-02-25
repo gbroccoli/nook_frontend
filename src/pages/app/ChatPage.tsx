@@ -733,8 +733,14 @@ export function ChatPage() {
 
     audioTrack.setAudioContext(ctx)
     try {
-      const { KrispNoiseFilter } = await import('@livekit/krisp-noise-filter')
-      await audioTrack.setProcessor(KrispNoiseFilter())
+      const { DeepFilterNoiseFilterProcessor } = await import('deepfilternet3-noise-filter')
+      await audioTrack.setProcessor(
+        new DeepFilterNoiseFilterProcessor({
+          sampleRate: 48000,
+          noiseReductionLevel: 65,
+          assetConfig: { cdnUrl: '/deepfilter' },
+        }),
+      )
     } catch (e) {
       console.warn('[mic] Failed to apply DeepFilterNet3 processor:', e)
     }
