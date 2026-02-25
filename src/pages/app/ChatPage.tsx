@@ -735,7 +735,11 @@ export function ChatPage() {
     audioTrack.setAudioContext(ctx)
     try {
       await audioTrack.setProcessor(
-        new DeepFilterNoiseFilterProcessor({ sampleRate: 48000, noiseReductionLevel: 80 }),
+        new DeepFilterNoiseFilterProcessor({
+          sampleRate: 48000,
+          noiseReductionLevel: 80,
+          assetConfig: { cdnUrl: '/deepfilter' },
+        }),
       )
     } catch (e) {
       console.warn('[mic] Failed to apply DeepFilterNet3 processor:', e)
