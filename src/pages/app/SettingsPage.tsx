@@ -7,6 +7,7 @@ import { authApi } from '@/api/auth'
 import { getHwid } from '@/lib/hwid'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
+import { Spinner } from '@/components/ui/spinner'
 import type { Session } from '@/types/api'
 
 // ── Хелперы аватара ──────────────────────────────────────────────────────────
@@ -139,7 +140,7 @@ function AvatarCropper({
         {/* Кнопки */}
         <div className="px-6 pb-5 flex justify-end gap-3">
           <Button variant="ghost" onClick={onCancel}>Отмена</Button>
-          <Button variant="primary" onClick={handleConfirm}>Применить</Button>
+          <Button variant="default" onClick={handleConfirm}>Применить</Button>
         </div>
 
       </div>
@@ -420,28 +421,29 @@ function ProfileSection() {
 
         {/* Поля */}
         <div className="space-y-4">
-          <Input
-            label="Отображаемое имя"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            maxLength={32}
-            hint={`${displayName.length}/32`}
-          />
-          <Input
-            label="Имя пользователя"
-            value={`@${user?.username ?? ''}`}
-            disabled
-          />
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-text-secondary">Отображаемое имя</label>
+            <Input
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              maxLength={32}
+            />
+            <span className="text-xs text-text-disabled">{displayName.length}/32</span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-text-secondary">Имя пользователя</label>
+            <Input value={`@${user?.username ?? ''}`} disabled />
+          </div>
         </div>
 
         {/* Кнопка сохранить */}
         <div className="mt-6 flex items-center gap-3">
           <Button
-            variant="primary"
+            variant="default"
             onClick={handleSave}
-            disabled={!isDirty || isEmpty}
-            loading={saving}
+            disabled={!isDirty || isEmpty || saving}
           >
+            {saving && <Spinner />}
             Сохранить
           </Button>
           {saved && (
@@ -910,7 +912,8 @@ function SessionsSection() {
         Завершение отдельных сессий пока не поддерживается API.
       </p>
 
-      <Button variant="danger" onClick={handleLogoutAll} loading={logoutAllLoading}>
+      <Button variant="destructive" onClick={handleLogoutAll} disabled={logoutAllLoading}>
+        {logoutAllLoading && <Spinner />}
         Завершить все сессии
       </Button>
     </div>
@@ -966,7 +969,8 @@ function AccountSection() {
             <p className="text-[14px] font-medium text-text">Выйти</p>
             <p className="text-[12px] text-text-secondary mt-0.5">Завершить текущую сессию</p>
           </div>
-          <Button variant="danger" size="sm" onClick={handleLogout} loading={logoutLoading}>
+          <Button variant="destructive" size="sm" onClick={handleLogout} disabled={logoutLoading}>
+            {logoutLoading && <Spinner />}
             Выйти
           </Button>
         </div>
@@ -978,7 +982,8 @@ function AccountSection() {
             <p className="text-[14px] font-medium text-text">Выйти везде</p>
             <p className="text-[12px] text-text-secondary mt-0.5">Завершить все активные сессии</p>
           </div>
-          <Button variant="danger" size="sm" onClick={handleLogoutAll} loading={logoutAllLoading}>
+          <Button variant="destructive" size="sm" onClick={handleLogoutAll} disabled={logoutAllLoading}>
+            {logoutAllLoading && <Spinner />}
             Выйти везде
           </Button>
         </div>
