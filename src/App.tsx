@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { SetupGuard } from '@/components/SetupGuard'
 import { AuthGuard } from '@/components/AuthGuard'
 import { SetupPage } from '@/pages/auth/SetupPage'
@@ -11,6 +12,7 @@ import { ChatPage } from '@/pages/app/ChatPage'
 export default function App() {
   return (
     <BrowserRouter>
+      <TooltipProvider>
       <Routes>
         {/* Публичные маршруты — сначала проверяем инициализацию */}
         <Route element={<SetupGuard />}>
@@ -31,6 +33,7 @@ export default function App() {
         <Route path="/" element={<Navigate to="/app" replace />} />
         <Route path="*" element={<Navigate to="/app" replace />} />
       </Routes>
+      </TooltipProvider>
     </BrowserRouter>
   )
 }

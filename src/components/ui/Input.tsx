@@ -1,43 +1,21 @@
-import type { InputHTMLAttributes, ReactNode } from 'react'
+import * as React from "react"
 
-interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
-  label?: string
-  error?: string
-  hint?: string
-  left?: ReactNode
-}
+import { cn } from "@/lib/utils"
 
-export function Input({ label, error, hint, left, className = '', ...props }: InputProps) {
+function Input({ className, type, ...props }: React.ComponentProps<"input">) {
   return (
-    <div className="flex flex-col gap-1.5">
-      {label && (
-        <label className="text-sm font-medium text-text-secondary">
-          {label}
-        </label>
+    <input
+      type={type}
+      data-slot="input"
+      className={cn(
+        "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+        "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+        "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+        className
       )}
-      <div className="relative">
-        {left && (
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-text-disabled">
-            {left}
-          </div>
-        )}
-        <input
-          className={`
-            w-full bg-secondary border rounded-xl px-4 py-2.5 text-sm text-text
-            placeholder:text-text-disabled
-            outline-none transition-all duration-150
-            ${error
-              ? 'border-error/50 focus:border-error'
-              : 'border-elevated focus:border-primary/50'
-            }
-            ${left ? 'pl-10' : ''}
-            ${className}
-          `}
-          {...props}
-        />
-      </div>
-      {error && <p className="text-xs text-error">{error}</p>}
-      {hint && !error && <p className="text-xs text-text-disabled">{hint}</p>}
-    </div>
+      {...props}
+    />
   )
 }
+
+export { Input }
