@@ -35,6 +35,10 @@
       "title": "Nook Setup",
       "subtitle": "First run. Create an administrator account.",
       "adminNotice": "This account will have system administrator privileges.",
+      "adminAlert": {
+        "title": "Administrator account",
+        "description": "This account will have full system administrator privileges."
+      },
       "submit": "Initialize system",
       "error": "Setup failed. Please try again later."
     },
