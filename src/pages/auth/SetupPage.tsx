@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { authApi } from '@/api/auth'
 import { useAuthStore } from '@/store/auth'
 import { getHwid } from '@/lib/hwid'
@@ -11,6 +12,7 @@ import { ApiError } from '@/api/client'
 export function SetupPage() {
   const navigate = useNavigate()
   const setAuth = useAuthStore((s) => s.setAuth)
+  const { t } = useTranslation()
 
   const [form, setForm] = useState({
     username: '',
@@ -38,7 +40,7 @@ export function SetupPage() {
       if (err instanceof ApiError && err.status === 409) {
         navigate('/login')
       } else {
-        setError('Ошибка при настройке. Попробуйте позже.')
+        setError(t('auth.setup.error'))
       }
     } finally {
       setLoading(false)
@@ -54,15 +56,15 @@ export function SetupPage() {
         <div className="flex flex-col items-center gap-4 mb-8">
           <Logo size={56} />
           <div className="text-center">
-            <h1 className="font-pixel text-[28px] font-semibold leading-[1.1] text-text">Настройка Nook</h1>
+            <h1 className="font-pixel text-[28px] font-semibold leading-[1.1] text-text">{t('auth.setup.title')}</h1>
             <p className="text-text-secondary text-sm mt-1 max-w-xs">
-              Первый запуск. Создайте аккаунт администратора.
+              {t('auth.setup.subtitle')}
             </p>
           </div>
         </div>
 
         <div className="bg-primary/10 border border-primary/20 rounded-xl px-4 py-3 mb-6 text-sm text-primary-glow">
-          Этот аккаунт получит права администратора системы.
+          {t('auth.setup.adminNotice')}
         </div>
 
         <form
@@ -70,21 +72,21 @@ export function SetupPage() {
           className="bg-secondary border border-elevated rounded-2xl p-6 flex flex-col gap-4"
         >
           <Input
-            label="Имя пользователя"
+            label={t('common.fields.username')}
             placeholder="admin"
             value={form.username}
             onChange={set('username')}
             disabled={loading}
           />
           <Input
-            label="Отображаемое имя"
+            label={t('common.fields.displayName')}
             placeholder="Admin"
             value={form.display_name}
             onChange={set('display_name')}
             disabled={loading}
           />
           <Input
-            label="Пароль"
+            label={t('common.fields.password')}
             type="password"
             placeholder="••••••••"
             value={form.password}
@@ -105,7 +107,7 @@ export function SetupPage() {
             disabled={!form.username || !form.display_name || !form.password}
             className="w-full mt-1"
           >
-            Инициализировать систему
+            {t('auth.setup.submit')}
           </Button>
         </form>
       </div>

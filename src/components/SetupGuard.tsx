@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Outlet } from 'react-router-dom'
 import { authApi } from '@/api/auth'
+import {Toaster} from "sonner";
 
 // Редиректит на /setup если система не инициализирована
 export function SetupGuard() {
@@ -20,5 +21,10 @@ export function SetupGuard() {
 
   if (!checked) return null
 
-  return <Outlet />
+  return (
+    <>
+      <Outlet />
+      <Toaster position={'bottom-right'} />
+    </>
+  )
 }

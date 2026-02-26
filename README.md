@@ -1,73 +1,83 @@
-# React + TypeScript + Vite
+# Nook — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Клиентская часть мессенджера Nook. Discord-образный интерфейс для общения в реальном времени.
 
-Currently, two official plugins are available:
+## Стек
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **React 19** + **TypeScript**
+- **Vite** — сборка и dev-сервер
+- **Tailwind CSS v4** — стилизация
+- **shadcn/ui** — UI-компоненты
+- **Zustand** — глобальное состояние
+- **React Router DOM v7** — маршрутизация
+- **react-hook-form** + **zod** — формы и валидация
+- **react-i18next** — интернационализация
 
-## React Compiler
+## Команды
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+bun dev       # Dev-сервер с HMR
+bun build     # Проверка типов + продакшн сборка
+bun lint      # ESLint
+bun preview   # Превью продакшн сборки локально
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Структура
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
 ```
+src/
+├── api/              # HTTP-клиент и domain-обёртки (auth, users, rooms...)
+├── components/
+│   ├── auth/         # Компоненты форм авторизации
+│   ├── chat/         # Компоненты чата (аудио, видео, сообщения)
+│   └── ui/           # Базовые UI-компоненты (shadcn + кастомные)
+├── i18n/
+│   ├── index.ts      # Конфиг i18next
+│   └── locales/      # Переводы (ru.json, en.json)
+├── lib/              # Утилиты (hwid, firebase, notifications)
+├── pages/
+│   ├── auth/         # Login, Register, Setup
+│   └── app/          # AppLayout, Chat, Home, Settings
+├── store/            # Zustand-сторы (auth, ws, call, rooms, toasts)
+└── types/            # Общие TypeScript-типы
+```
+
+## Маршрутизация
+
+Двухуровневая система guards:
+
+1. **SetupGuard** — проверяет инициализацию сервера (`GET /api/v1/setup`). Если сервер не настроен — редирект на `/setup`.
+2. **AuthGuard** — валидирует JWT через `GET /api/v1/users/me`. При 401 — редирект на `/login`.
+
+```
+/              → редирект на /app
+/setup         → первоначальная настройка (создание admin-аккаунта)
+/login         → авторизация
+/register      → регистрация
+/app           → главная (защищённая)
+/app/dm/:roomId → личные сообщения
+```
+
+## API
+
+Все запросы идут на `/api/v1`. Клиент (`src/api/client.ts`) автоматически:
+- Прикрепляет `Authorization: Bearer <token>` из `localStorage`
+- При 401 выполняет refresh через `POST /api/v1/auth/refresh` и повторяет запрос
+
+## Локализация
+
+Переводы лежат в `src/i18n/locales/`. Текущий язык по умолчанию — `ru`. Добавление нового языка: создать файл `en.json` рядом и добавить его в `src/i18n/index.ts`.
+
+## Дизайн-система
+
+Tailwind v4 с кастомными токенами в `src/index.css`:
+
+| Утилита            | Значение                  |
+|--------------------|---------------------------|
+| `bg-bg`            | `#0D0F12` — фон страницы  |
+| `bg-secondary`     | `#171A1F` — боковые панели |
+| `bg-elevated`      | `#1E2228` — карточки       |
+| `bg-primary`       | `#00F5A0` — акцентный зелёный |
+| `text-text`        | `#F5F7FA`                 |
+| `text-text-secondary` | `#A8B0B8`              |
+| `font-pixel`       | Pixelify Sans             |

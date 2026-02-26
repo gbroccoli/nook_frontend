@@ -357,7 +357,7 @@ function readCallMediaSettings(): CallMediaSettings {
 function buildAudioCaptureOptions(settings: CallMediaSettings): AudioCaptureOptions {
   return {
     deviceId: settings.audioInputId,
-    sampleRate: 48000,
+    sampleRate: { ideal: 48000 },
     // Браузерный шумодав отключён — DeepFilterNet3 применяется отдельно после создания трека
     noiseSuppression: false,
     echoCancellation: settings.echoCancellation ? { ideal: true } : false,
