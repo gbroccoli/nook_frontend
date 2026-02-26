@@ -1,16 +1,20 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, Outlet } from 'react-router-dom'
+import { useNavigate, useLocation, Outlet } from 'react-router-dom'
 import { authApi } from '@/api/auth'
+import {Toaster} from "sonner";
 
 // Редиректит на /setup если система не инициализирована
 export function SetupGuard() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [checked, setChecked] = useState(false)
 
   useEffect(() => {
     authApi.checkSetup().then(({ initialized }) => {
       if (!initialized) {
         navigate('/setup', { replace: true })
+      } else if (location.pathname === '/setup') {
+        navigate('/login', { replace: true })
       }
       setChecked(true)
     }).catch(() => {
@@ -20,5 +24,10 @@ export function SetupGuard() {
 
   if (!checked) return null
 
-  return <Outlet />
+  return (
+    <>
+      <Outlet />
+      <Toaster position={'bottom-right'} />
+    </>
+  )
 }

@@ -1,0 +1,53 @@
+{
+  "common": {
+    "fields": {
+      "username": "Username",
+      "displayName": "Display name",
+      "password": "Password",
+      "confirmPassword": "Confirm password"
+    },
+    "hints": {
+      "usernameFormat": "English lowercase letters, numbers and _ only"
+    },
+    "errors": {
+      "serverError": "Server error. Please try again later."
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Welcome back",
+      "subtitle": "Sign in to your Nook account",
+      "submit": "Sign in",
+      "noAccount": "Don't have an account?",
+      "toRegister": "Sign up"
+    },
+    "register": {
+      "title": "Create an account",
+      "subtitle": "Join Nook",
+      "submit": "Sign up",
+      "hasAccount": "Already have an account?",
+      "toLogin": "Sign in",
+      "errors": {
+        "usernameTaken": "Username is already taken"
+      }
+    },
+    "setup": {
+      "title": "Nook Setup",
+      "subtitle": "First run. Create an administrator account.",
+      "adminNotice": "This account will have system administrator privileges.",
+      "adminAlert": {
+        "title": "Administrator account",
+        "description": "This account will have full system administrator privileges."
+      },
+      "submit": "Initialize system",
+      "error": "Setup failed. Please try again later."
+    },
+    "validation": {
+      "usernameMin": "Minimum 3 characters",
+      "usernameFormat": "English lowercase letters, numbers and _ only",
+      "displayNameRequired": "Required field",
+      "passwordMin": "Minimum 8 characters",
+      "passwordMatch": "Passwords do not match"
+    }
+  }
+}
