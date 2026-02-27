@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { messagesApi } from '@/api/messages'
 import { useRoomsStore } from '@/store/rooms'
 import { usePresenceStore } from '@/store/presence'
-import { subscribe } from '@/store/ws'
+import { subscribe, sendWs } from '@/store/ws'
 import { useAuthStore } from '@/store/auth'
 import type { Message } from '@/types/api'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -37,11 +37,15 @@ export function ChatPage() {
   const [error, setError] = useState<string | null>(null)
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null)
   const [attachedFile, setAttachedFile] = useState<File | null>(null)
+  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set())
 
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
   const newMessageScrollTimerRef = useRef<number | null>(null)
   const knownMessageIdsRef = useRef<Set<string>>(new Set())
+  const typingTimersRef = useRef<Map<string, number>>(new Map())
+  const typingStateRef = useRef(false)
+  const typingStopTimerRef = useRef<number | null>(null)
 
   const oldestId = useMemo(() => (messages.length > 0 ? messages[0].id : undefined), [messages])
 
@@ -136,6 +140,9 @@ export function ChatPage() {
     setContent('')
     setError(null)
     setReplyToMessage(null)
+    setTypingUsers(new Set())
+    typingTimersRef.current.forEach(t => clearTimeout(t))
+    typingTimersRef.current.clear()
     fetchMessages().then(r => r)
   }, [roomId, fetchMessages])
 
@@ -204,8 +211,58 @@ export function ChatPage() {
           }),
         )
       }
+
+      if (event.type === 'typing.start' || event.type === 'typing.stop') {
+        const payload = event.payload as { user_id?: string; userId?: string; room_id?: string; roomId?: string }
+        const typingRoomId = payload.room_id ?? payload.roomId
+        const userId = payload.user_id ?? payload.userId
+        if (!typingRoomId || typingRoomId !== roomId || !userId || userId === currentUserId) return
+
+        const existing = typingTimersRef.current.get(userId)
+        if (existing) clearTimeout(existing)
+        typingTimersRef.current.delete(userId)
+        setTypingUsers(prev => { const next = new Set(prev); next.delete(userId); return next })
+
+        if (event.type === 'typing.start') {
+          const timer = window.setTimeout(() => {
+            setTypingUsers(prev => { const next = new Set(prev); next.delete(userId); return next })
+            typingTimersRef.current.delete(userId)
+          }, 6000)
+          typingTimersRef.current.set(userId, timer)
+          setTypingUsers(prev => { const next = new Set(prev); next.add(userId); return next })
+        }
+      }
     })
   }, [roomId, currentUserId, currentUser?.username, scrollToBottomSoon])
+
+  // Останавливаем свою печать при смене комнаты / анмаунте
+  useEffect(() => {
+    return () => {
+      if (typingStopTimerRef.current !== null) {
+        clearTimeout(typingStopTimerRef.current)
+        typingStopTimerRef.current = null
+      }
+      if (typingStateRef.current) {
+        typingStateRef.current = false
+        sendWs('typing.stop', { room_id: roomId })
+      }
+    }
+  }, [roomId])
+
+  const handleContentChange = useCallback((value: string) => {
+    setContent(value)
+    if (!roomId) return
+    if (!typingStateRef.current) {
+      typingStateRef.current = true
+      sendWs('typing.start', { room_id: roomId })
+    }
+    if (typingStopTimerRef.current !== null) clearTimeout(typingStopTimerRef.current)
+    typingStopTimerRef.current = window.setTimeout(() => {
+      typingStateRef.current = false
+      typingStopTimerRef.current = null
+      sendWs('typing.stop', { room_id: roomId })
+    }, 3000)
+  }, [roomId])
 
   const handleToggleReaction = useCallback(async (messageId: string, emoji: string) => {
     const msg = messages.find((m) => m.id === messageId)
@@ -245,6 +302,14 @@ export function ChatPage() {
     const text = content.trim()
     const replyId = replyToMessage?.id
     const file = attachedFile
+    if (typingStopTimerRef.current !== null) {
+      clearTimeout(typingStopTimerRef.current)
+      typingStopTimerRef.current = null
+    }
+    if (typingStateRef.current) {
+      typingStateRef.current = false
+      sendWs('typing.stop', { room_id: roomId })
+    }
     setSending(true)
     setContent('')
     setReplyToMessage(null)
@@ -274,6 +339,16 @@ export function ChatPage() {
   }
 
   const sortedMessages = useMemo(() => normalizeForRender(messages), [messages])
+
+  const typingText = useMemo(() => {
+    const names = [...typingUsers].map(id => {
+      const u = usersById.get(id)
+      return u?.display_name || u?.username || 'Кто-то'
+    })
+    if (names.length === 1) return names[0]
+    if (names.length === 2) return `${names[0]} и ${names[1]}`
+    return `${names[0]} и ещё ${names.length - 1}`
+  }, [typingUsers, usersById])
 
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -360,6 +435,20 @@ export function ChatPage() {
         </div>
       </ScrollArea>
 
+      {/* Typing indicator */}
+      <div className="px-5 h-5 flex items-center shrink-0">
+        {typingUsers.size > 0 && (
+          <div className="flex items-center gap-1.5 text-[11px] text-text-secondary">
+            <span className="flex gap-0.5 items-center">
+              <span className="w-1 h-1 rounded-full bg-text-secondary/70 animate-bounce [animation-delay:0ms]" />
+              <span className="w-1 h-1 rounded-full bg-text-secondary/70 animate-bounce [animation-delay:150ms]" />
+              <span className="w-1 h-1 rounded-full bg-text-secondary/70 animate-bounce [animation-delay:300ms]" />
+            </span>
+            <span>{typingText} {typingUsers.size === 1 ? 'печатает' : 'печатают'}</span>
+          </div>
+        )}
+      </div>
+
       {/* Ввод */}
       <div className="px-4 pb-5 pt-2 shrink-0">
         {error && (
@@ -401,7 +490,7 @@ export function ChatPage() {
               <textarea
                 ref={composerRef}
                 value={content}
-                onChange={(e) => setContent(e.target.value)}
+                onChange={(e) => handleContentChange(e.target.value)}
                 onKeyDown={handleComposerKeyDown}
                 rows={1}
                 placeholder={`Написать ${displayName}...`}
