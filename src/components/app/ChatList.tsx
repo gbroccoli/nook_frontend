@@ -5,12 +5,12 @@ import {
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarMenu,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSkeleton,
 } from '@/components/ui/sidebar'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Badge } from '@/components/ui/badge'
 import { Plus } from 'lucide-react'
 import { useRoomsStore } from '@/store/rooms'
 import { usePresenceStore } from '@/store/presence'
@@ -107,9 +107,9 @@ export function ChatList({ onNewDm }: ChatListProps) {
                   </NavLink>
                 </SidebarMenuButton>
                 {unread > 0 && (
-                  <SidebarMenuBadge>
+                  <Badge variant="destructive" className="ml-auto text-[10px] h-4 min-w-4 px-1 tabular-nums">
                     {unread > 99 ? '99+' : unread}
-                  </SidebarMenuBadge>
+                  </Badge>
                 )}
               </SidebarMenuItem>
             )
