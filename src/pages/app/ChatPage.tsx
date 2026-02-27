@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/auth'
 import type { Message } from '@/types/api'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { MessageBubble } from '@/components/chat/MessageBubble'
+import { FileAttachButton, FilePreview } from '@/components/chat/FileAttach'
 import { X } from 'lucide-react'
 import { roomColor } from '@/pages/app/tools/colors'
 import { PAGE_SIZE, formatTime, normalizeForRender, getAuthorKey, applyOptimisticReaction } from '@/pages/app/tools/messages'
@@ -35,6 +36,7 @@ export function ChatPage() {
   const [content, setContent] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null)
+  const [attachedFile, setAttachedFile] = useState<File | null>(null)
 
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
@@ -236,26 +238,33 @@ export function ChatPage() {
     }
   }, [messages])
 
-  const canSend = content.trim().length > 0 && !sending
+  const canSend = (content.trim().length > 0 || attachedFile !== null) && !sending
 
   const handleSend = useCallback(async () => {
     if (!roomId || !canSend) return
     const text = content.trim()
     const replyId = replyToMessage?.id
+    const file = attachedFile
     setSending(true)
     setContent('')
     setReplyToMessage(null)
+    setAttachedFile(null)
     setError(null)
     try {
-      await messagesApi.send(roomId, text, replyId)
+      if (file) {
+        await messagesApi.sendWithFile(roomId, file, text, replyId)
+      } else {
+        await messagesApi.send(roomId, text, replyId)
+      }
     } catch {
       setError('Не удалось отправить сообщение')
       setContent(text)
+      setAttachedFile(file)
     } finally {
       setSending(false)
       composerRef.current?.focus()
     }
-  }, [roomId, canSend, content, replyToMessage])
+  }, [roomId, canSend, content, replyToMessage, attachedFile])
 
   function handleComposerKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -360,6 +369,10 @@ export function ChatPage() {
         )}
         <div className="rounded-2xl border border-elevated/80 bg-[linear-gradient(180deg,rgba(30,34,40,0.96)_0%,rgba(23,26,31,0.96)_100%)] shadow-[0_10px_30px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.03)] transition-colors focus-within:border-primary/45">
 
+          {attachedFile && (
+            <FilePreview file={attachedFile} onRemove={() => setAttachedFile(null)} />
+          )}
+
           {replyToMessage && (
             <div className="px-3 pt-2">
               <div className="flex items-start gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2">
@@ -383,6 +396,7 @@ export function ChatPage() {
           )}
 
           <div className="flex items-start gap-2 p-2">
+            <FileAttachButton onFileChange={setAttachedFile} disabled={sending} />
             <div className="flex-1 min-w-0 bg-bg/35 rounded-xl px-3 py-2 border border-elevated/70 focus-within:border-primary/35 transition-colors">
               <textarea
                 ref={composerRef}
