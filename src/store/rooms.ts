@@ -3,6 +3,7 @@ import { roomsApi } from '@/api/rooms'
 import { usersApi } from '@/api/users'
 import { useAuthStore } from '@/store/auth'
 import { usePresenceStore } from '@/store/presence'
+import { useUnreadStore } from '@/store/unread'
 import type { Room, User } from '@/types/api'
 
 interface RoomsState {
@@ -73,6 +74,15 @@ export const useRoomsStore = create<RoomsState>((set) => ({
           dmUsers[roomId] = usersById[userId]
         }
       }
+
+      // Seed unread counts from server response
+      const unreadCounts: Record<string, number> = {}
+      for (const room of rooms) {
+        if (room.unread_count && room.unread_count > 0) {
+          unreadCounts[room.id] = room.unread_count
+        }
+      }
+      useUnreadStore.getState().seed(unreadCounts)
 
       set({ rooms, dmUsers, loading: false })
     } catch {

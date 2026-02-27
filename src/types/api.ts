@@ -75,6 +75,7 @@ export interface Room {
   name?: string
   avatar_url?: string
   last_message_at?: string
+  unread_count?: number
   created_at: string
 }
 
