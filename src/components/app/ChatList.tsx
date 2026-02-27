@@ -30,6 +30,11 @@ export function ChatList({ onNewDm }: ChatListProps) {
   const currentUserId = useAuthStore((s) => s.user?.id)
   const location = useLocation()
 
+  const activeRoomId = useMemo(() => {
+    const match = location.pathname.match(/^\/app\/dm\/([^/?#]+)/)
+    return match ? decodeURIComponent(match[1]) : null
+  }, [location.pathname])
+
   // Загрузка при монтировании
   useEffect(() => {
     fetchRooms().then(r => r)
@@ -55,11 +60,6 @@ export function ChatList({ onNewDm }: ChatListProps) {
       }
     })
   }, [fetchRooms, touchRoom, activeRoomId, currentUserId])
-
-  const activeRoomId = useMemo(() => {
-    const match = location.pathname.match(/^\/app\/dm\/([^/?#]+)/)
-    return match ? decodeURIComponent(match[1]) : null
-  }, [location.pathname])
 
   const sortedRooms = useMemo(
     () => [...rooms].sort((a, b) => {
