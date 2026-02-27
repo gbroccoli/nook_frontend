@@ -103,14 +103,14 @@ export function ChatList({ onNewDm }: ChatListProps) {
                         <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-success border-2 border-sidebar" />
                       )}
                     </div>
-                    <span className="truncate">{label}</span>
+                    <span className="truncate flex-1">{label}</span>
+                    {unread > 0 && (
+                      <Badge variant="destructive" className="shrink-0 text-[10px] h-4 min-w-4 px-1 tabular-nums">
+                        {unread > 99 ? '99+' : unread}
+                      </Badge>
+                    )}
                   </NavLink>
                 </SidebarMenuButton>
-                {unread > 0 && (
-                  <Badge variant="destructive" className="ml-auto text-[10px] h-4 min-w-4 px-1 tabular-nums">
-                    {unread > 99 ? '99+' : unread}
-                  </Badge>
-                )}
               </SidebarMenuItem>
             )
           })}
