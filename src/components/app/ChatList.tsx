@@ -23,7 +23,7 @@ interface ChatListProps {
 }
 
 export function ChatList({ onNewDm, unreadByRoom = {} }: ChatListProps) {
-  const { rooms, dmUsers, loading, fetch: fetchRooms } = useRoomsStore()
+  const { rooms, dmUsers, loading, fetch: fetchRooms, touchRoom } = useRoomsStore()
   const online = usePresenceStore((s) => s.online)
   const location = useLocation()
 
@@ -32,17 +32,22 @@ export function ChatList({ onNewDm, unreadByRoom = {} }: ChatListProps) {
     fetchRooms().then(r => r)
   }, [fetchRooms])
 
-  // Если по WS пришло сообщение из неизвестной комнаты — рефетч
+  // WS: новое сообщение → поднять комнату вверх или рефетч если неизвестна
   useEffect(() => {
     return subscribe((event) => {
       if (event.type !== 'message.new') return
-      const payload = event.payload as { room_id?: string; roomId?: string }
+      const payload = event.payload as { room_id?: string; roomId?: string; created_at?: string }
       const roomId = payload.room_id ?? payload.roomId
       if (!roomId) return
       const known = useRoomsStore.getState().rooms.some((r) => r.id === roomId)
-      if (!known) fetchRooms().then(r => r)
+      if (!known) {
+        fetchRooms().then(r => r)
+      } else {
+        const at = payload.created_at ?? new Date().toISOString()
+        touchRoom(roomId, at)
+      }
     })
-  }, [fetchRooms])
+  }, [fetchRooms, touchRoom])
 
   const activeRoomId = useMemo(() => {
     const match = location.pathname.match(/^\/app\/dm\/([^/?#]+)/)

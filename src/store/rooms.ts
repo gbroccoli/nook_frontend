@@ -10,12 +10,19 @@ interface RoomsState {
   dmUsers: Record<string, User>
   loading: boolean
   fetch: () => Promise<void>
+  touchRoom: (roomId: string, at: string) => void
 }
 
 export const useRoomsStore = create<RoomsState>((set) => ({
   rooms: [],
   dmUsers: {},
   loading: false,
+
+  touchRoom: (roomId, at) => set((state) => ({
+    rooms: state.rooms.map((r) =>
+      r.id === roomId ? { ...r, last_message_at: at } : r
+    ),
+  })),
 
   fetch: async () => {
     set({ loading: true })
