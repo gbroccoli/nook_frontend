@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { messagesApi } from '@/api/messages'
+import { roomsApi } from '@/api/rooms'
 import { useRoomsStore } from '@/store/rooms'
 import { usePresenceStore } from '@/store/presence'
 import { subscribe, sendWs } from '@/store/ws'
 import { useAuthStore } from '@/store/auth'
+import { useUnreadStore } from '@/store/unread'
 import type { Message } from '@/types/api'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { MessageBubble } from '@/components/chat/MessageBubble'
@@ -143,6 +145,10 @@ export function ChatPage() {
     setTypingUsers(new Set())
     typingTimersRef.current.forEach(t => clearTimeout(t))
     typingTimersRef.current.clear()
+    if (roomId) {
+      useUnreadStore.getState().clear(roomId)
+      roomsApi.read(roomId).catch(() => {})
+    }
     fetchMessages().then(r => r)
   }, [roomId, fetchMessages])
 

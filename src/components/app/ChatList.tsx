@@ -14,17 +14,20 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Plus } from 'lucide-react'
 import { useRoomsStore } from '@/store/rooms'
 import { usePresenceStore } from '@/store/presence'
+import { useUnreadStore } from '@/store/unread'
+import { useAuthStore } from '@/store/auth'
 import { useEffect, useMemo } from 'react'
 import { subscribe } from '@/store/ws'
 
 interface ChatListProps {
   onNewDm: () => void
-  unreadByRoom?: Record<string, number>
 }
 
-export function ChatList({ onNewDm, unreadByRoom = {} }: ChatListProps) {
+export function ChatList({ onNewDm }: ChatListProps) {
   const { rooms, dmUsers, loading, fetch: fetchRooms, touchRoom } = useRoomsStore()
   const online = usePresenceStore((s) => s.online)
+  const unreadByRoom = useUnreadStore((s) => s.byRoom)
+  const currentUserId = useAuthStore((s) => s.user?.id)
   const location = useLocation()
 
   // Загрузка при монтировании
@@ -32,11 +35,11 @@ export function ChatList({ onNewDm, unreadByRoom = {} }: ChatListProps) {
     fetchRooms().then(r => r)
   }, [fetchRooms])
 
-  // WS: новое сообщение → поднять комнату вверх или рефетч если неизвестна
+  // WS: новое сообщение → поднять комнату вверх или рефетч если неизвестна + инкремент непрочитанных
   useEffect(() => {
     return subscribe((event) => {
       if (event.type !== 'message.new') return
-      const payload = event.payload as { room_id?: string; roomId?: string; created_at?: string }
+      const payload = event.payload as { room_id?: string; roomId?: string; created_at?: string; author?: { id?: string } }
       const roomId = payload.room_id ?? payload.roomId
       if (!roomId) return
       const known = useRoomsStore.getState().rooms.some((r) => r.id === roomId)
@@ -45,9 +48,13 @@ export function ChatList({ onNewDm, unreadByRoom = {} }: ChatListProps) {
       } else {
         const at = payload.created_at ?? new Date().toISOString()
         touchRoom(roomId, at)
+        const isOwn = payload.author?.id === currentUserId
+        if (!isOwn && roomId !== activeRoomId) {
+          useUnreadStore.getState().increment(roomId)
+        }
       }
     })
-  }, [fetchRooms, touchRoom])
+  }, [fetchRooms, touchRoom, activeRoomId, currentUserId])
 
   const activeRoomId = useMemo(() => {
     const match = location.pathname.match(/^\/app\/dm\/([^/?#]+)/)
