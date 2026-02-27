@@ -170,6 +170,17 @@ button {
   --sidebar-ring: oklch(0.856 0.199 159);
 }
 
+@keyframes msg-flash {
+  0%   { background-color: transparent; }
+  20%  { background-color: rgba(0, 245, 160, 0.14); }
+  100% { background-color: transparent; }
+}
+
+.msg-highlight {
+  animation: msg-flash 1.4s ease-out;
+  border-radius: 8px;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import Cropper from 'react-easy-crop'
 import { useAuthStore } from '@/store/auth'
 import { usersApi } from '@/api/users'
@@ -997,91 +998,82 @@ function AccountSection() {
 export function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
 
-  useEffect(() => {
-    if (!open) return
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose])
-
-  if (!open) return null
-
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center"
-      onClick={onClose}
-    >
-      {/* Обёртка модала + кнопка закрытия */}
-      <div
-        className="flex items-start gap-3"
-        onClick={(e) => e.stopPropagation()}
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent
+        showCloseButton={false}
+        className="w-auto max-w-none p-0 gap-0 bg-transparent border-none shadow-none"
       >
-        {/* Само окно */}
-        <div className="w-[780px] h-[580px] bg-bg rounded-xl overflow-hidden flex shadow-2xl">
+        <DialogTitle className="sr-only">Настройки</DialogTitle>
 
-          {/* Левый сайдбар */}
-          <div className="w-[210px] bg-secondary py-5 px-3 flex flex-col shrink-0 overflow-y-auto">
+        {/* Обёртка модала + кнопка закрытия */}
+        <div className="flex items-start gap-3">
 
-            <div className="px-3 mb-3">
-              <span className="text-[11px] font-bold text-text-disabled uppercase tracking-[0.9px]">
-                Настройки
-              </span>
+          {/* Само окно */}
+          <div className="w-[780px] h-[580px] bg-bg rounded-xl overflow-hidden flex shadow-2xl">
+
+            {/* Левый сайдбар */}
+            <div className="w-[210px] bg-secondary py-5 px-3 flex flex-col shrink-0 overflow-y-auto">
+
+              <div className="px-3 mb-3">
+                <span className="text-[11px] font-bold text-text-disabled uppercase tracking-[0.9px]">
+                  Настройки
+                </span>
+              </div>
+
+              <div className="space-y-0.5">
+                <SidebarTab active={activeTab === 'profile'} onClick={() => setActiveTab('profile')}>
+                  Профиль
+                </SidebarTab>
+                <SidebarTab active={activeTab === 'security'} onClick={() => setActiveTab('security')}>
+                  Безопасность
+                </SidebarTab>
+                <SidebarTab active={activeTab === 'voice-video'} onClick={() => setActiveTab('voice-video')}>
+                  Голос/видео
+                </SidebarTab>
+                <SidebarTab active={activeTab === 'sessions'} onClick={() => setActiveTab('sessions')}>
+                  Сессии
+                </SidebarTab>
+              </div>
+
+              <div className="my-2 h-px bg-elevated/40 mx-3" />
+
+              <div className="space-y-0.5">
+                <SidebarTab
+                  active={activeTab === 'account'}
+                  onClick={() => setActiveTab('account')}
+                  danger
+                >
+                  Аккаунт
+                </SidebarTab>
+              </div>
             </div>
 
-            <div className="space-y-0.5">
-              <SidebarTab active={activeTab === 'profile'} onClick={() => setActiveTab('profile')}>
-                Профиль
-              </SidebarTab>
-              <SidebarTab active={activeTab === 'security'} onClick={() => setActiveTab('security')}>
-                Безопасность
-              </SidebarTab>
-              <SidebarTab active={activeTab === 'voice-video'} onClick={() => setActiveTab('voice-video')}>
-                Голос/видео
-              </SidebarTab>
-              <SidebarTab active={activeTab === 'sessions'} onClick={() => setActiveTab('sessions')}>
-                Сессии
-              </SidebarTab>
+            {/* Правая часть */}
+            <div className="flex-1 overflow-y-auto px-8 py-8">
+              {activeTab === 'profile' && <ProfileSection />}
+              {activeTab === 'security' && <SecuritySection />}
+              {activeTab === 'voice-video' && <VoiceVideoSection />}
+              {activeTab === 'sessions' && <SessionsSection />}
+              {activeTab === 'account' && <AccountSection />}
             </div>
 
-            <div className="my-2 h-px bg-elevated/40 mx-3" />
-
-            <div className="space-y-0.5">
-              <SidebarTab
-                active={activeTab === 'account'}
-                onClick={() => setActiveTab('account')}
-                danger
-              >
-                Аккаунт
-              </SidebarTab>
-            </div>
           </div>
 
-          {/* Правая часть */}
-          <div className="flex-1 overflow-y-auto px-8 py-8">
-            {activeTab === 'profile' && <ProfileSection />}
-            {activeTab === 'security' && <SecuritySection />}
-            {activeTab === 'voice-video' && <VoiceVideoSection />}
-            {activeTab === 'sessions' && <SessionsSection />}
-            {activeTab === 'account' && <AccountSection />}
+          {/* Кнопка закрытия */}
+          <div className="flex flex-col items-center gap-1 pt-1">
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full border-2 border-text-disabled/50 hover:border-text flex items-center justify-center text-text-disabled hover:text-text transition-colors"
+              title="Закрыть (ESC)"
+            >
+              <IconX />
+            </button>
+            <span className="text-[10px] text-text-disabled font-medium">ESC</span>
           </div>
 
         </div>
-
-        {/* Кнопка закрытия */}
-        <div className="flex flex-col items-center gap-1 pt-1">
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full border-2 border-text-disabled/50 hover:border-text flex items-center justify-center text-text-disabled hover:text-text transition-colors"
-            title="Закрыть (ESC)"
-          >
-            <IconX />
-          </button>
-          <span className="text-[10px] text-text-disabled font-medium">ESC</span>
-        </div>
-
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
